@@ -1,5 +1,7 @@
 library(rvest)
 library(dplyr)
+library(svMisc)
+rm(list = ls())
 
 for(page in 1:20){
   die_wertvollsten_spieler <- read_html(
@@ -32,120 +34,118 @@ for(page in 1:20){
                                 id = ids, 
                                 "market_value (Mio.€)" = spieler_wert))
   }
-  svMisc::progress(page, max.value = 20, progress.bar = T)
+  progress(page, max.value = 20)
 }
 
-for(i in 1:nrow(players)){
-  player <- read_html(
+# Get all variables from player profile box and save players profiles
+
+vars <- list()
+players_list <- list()
+
+for(i in 1:500){
+  players_list[[i]] <- read_html(
     x = paste("https://www.transfermarkt.us",
               players$url[i], sep = ""))
-  
-  # Name in home country
-  player %>% html_nodes(".auflistung tr:nth-child(1) td") %>% html_text()
+  data <- players_list[[i]] %>% html_nodes(".auflistung td , .auflistung th") %>% 
+    html_text(trim = T)
+  vars[[i]] <- data[seq(from = 1, to = length(data), by = 2)]
+  progress(i, max.value = 500)
+}
+
+vars <- vars %>% unlist()
+df <- as.data.frame(matrix(ncol=length(unique(vars)),nrow=nrow(players)))
+colnames(df) <- unique(vars)
+players_new <- cbind(players, df)
+
+# Add variables from other places
+vars <- c("current_club", "ligue", "ligue_level", "other_pos.","curr_int", "caps", "goals", "reached_max_val.", "max_val.")
+df <- as.data.frame(matrix(ncol=length(unique(vars)),nrow=nrow(players)))
+colnames(df) <- unique(vars)
+players_final <- cbind(players_new, df)
+
+
+for(i in 1:nrow(players)){
+  player <- players_list[[i]]
   
   # Current Club
-  player %>% html_nodes(".hauptpunkt") %>% html_text()
+  players_final$current_club[i] <- player %>% html_nodes(".hauptpunkt") %>% html_text()
   
   # Liga
-  player %>% html_nodes(".mediumpunkt a") %>% 
+  ligue <- player %>% html_nodes(".mediumpunkt a") %>% 
     html_text() %>% stringr::str_remove_all("\\t") %>% 
     stringr::str_remove_all("\\n")
+  
+  if(length(ligue) ==1){players_final$ligue[i] <- ligue
+  }else{
+    players_final$ligue[i] <- NA
+  }
   
   # Ligahoehe
-  player %>% html_nodes(".dataValue:nth-child(6)") %>% 
+  ligueh <- player %>% html_nodes(".dataValue:nth-child(6)") %>% 
     html_text() %>% stringr::str_remove_all("\\t") %>% 
     stringr::str_remove_all("\\n")
   
-  # Joined
-  player %>% html_nodes("tr:nth-child(11) td") %>% 
-    html_text(trim = T)
+  if(length(ligueh) ==1){players_final$ligue_level[i] <- ligueh
+  }else{
+    players_final$ligue_level[i] <- NA
+  }
   
-  # Vertrag bis
-  player %>% html_nodes(".dataValue:nth-child(12)") %>% 
-    html_text()
-  
-  # Date of Birth
-  player %>% html_nodes(".auflistung tr:nth-child(2) a") %>% 
-    html_text()
-  
-  # Age
-  player %>% html_nodes(".auflistung tr:nth-child(4) td") %>% 
-    html_text() %>% as.numeric()
-  
-  # Place of Birth
-  player %>% html_nodes(".spielerdaten span") %>% 
-    html_text(trim = T)
-  
-  # Citizenship
-  player %>% html_nodes(".auflistung tr:nth-child(6) td") %>% 
-    html_text(trim = T)
-  
-  # Height
-  player %>% html_nodes(".dataDaten:nth-child(2) p:nth-child(1) .dataValue") %>% 
-    html_text() %>% stringr::str_remove_all("\\t") %>% 
-    stringr::str_remove_all("\\n")
-
-  # Position
-  player %>% html_nodes(".hauptposition-left") %>% 
-    html_text(trim = T) %>% stringr::str_remove_all("Main position") %>%
-    stringr::str_remove_all(":") %>%
-    stringr::str_remove_all(" ")
   
   # Other positions
-  player %>% html_nodes(".nebenpositionen") %>% 
-    html_text(trim = T) %>% stringr::str_remove_all("Other position") %>%
-    stringr::str_remove_all(":") %>%
+  op <- player %>% html_nodes(".nebenpositionen") %>% 
+    html_text(trim = T) %>% stringr::str_replace_all("\\s+", " ") %>%
     stringr::str_remove_all("\\(.*\\)") %>%
-    stringr::str_remove_all(" ") %>% stringr::str_remove_all("\\n")
-  
-  
-  # Agent
-  player %>% html_nodes(".show-for-small+ p a") %>% 
-    html_text() %>% stringr::str_remove_all("\\t") %>% 
-    stringr::str_remove_all("\\n")
-  
+    stringr::str_remove_all("Other position: ")
+  if(length(op) ==1){players_final$other_pos.[i] <- op
+  }else{
+    players_final$other_pos.[i] <- NA
+  }
   # Current International
-  player %>% html_nodes(".dataValue .tooltipstered") %>% 
-    html_text() %>% stringr::str_remove_all("\\t") %>% 
-    stringr::str_remove_all("\\n")
-
-  # Current International
-  player %>% html_nodes(".forMobile") %>% 
+  ci <- player %>% html_nodes(".forMobile") %>% 
     html_text() %>% stringr::str_remove_all("\\t") %>% 
     stringr::str_remove_all("\\n") %>%
-    str_remove_all("Current international:")
+    stringr::str_remove_all("Current international:")
+  if(length(ci) ==1){players_final$curr_int[i] <- ci
+  }else{
+    players_final$curr_int[i] <- NA
+  }
   
   # Caps/Goals
   caps_goals <- player %>% html_nodes(".hide-for-small .dataValue a") %>% 
     html_text() %>% as.numeric()
   
   # Caps
-  caps_goals[1]
+  players_final$caps[i] <- caps_goals[1]
   
   # Goals
-  caps_goals[2]
+  players_final$goals[i] <- caps_goals[2] 
   
-  # Foot:
-  player %>% html_nodes(".auflistung tr:nth-child(8) td") %>% 
-    html_text()
+  # Reached Highest Market Value
+  hmv <- player %>% html_nodes(".zeile-unten span") %>% 
+    html_text(trim = T)
+  if(length(hmv[2]) ==1){players_final$reached_max_val.[i] <- hmv[2]
+  }else{
+    players_final$reached_max_val.[i] <- NA
+  }
   
-  #
+  # Highest Market Value
+  maxval <- player %>% html_nodes(".zeile-unten .right-td") %>% 
+    html_text(trim = T) %>% readr::parse_number()
   
+  if(length(maxval) ==1){players_final$max_val.[i] <- maxval
+  }else{
+    players_final$max_val.[i] <- NA
+  }
   
-
+  # Data from Players Profile
+  pp_data <- player %>% html_nodes(".auflistung th , .auflistung td") %>% 
+    html_text(trim = T)
   
+  players_final[i,pp_data[seq(1,length(pp_data),2)]] <- pp_data[seq(2,length(pp_data),2)]
   
-  
+  progress(i, max.value = nrow(players_final))
 }
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-}
 
+players <- players_final
+
+save(file = "soccer_data.rda", players)
