@@ -39,10 +39,10 @@ get_data <- function(id) {
 thresholds <- seq(500, 8e4, 500)
 
 # initialise
-df <- get_data(1e4)
+df <- get_data(20000)
 
-for (id in 10037:2e4) {
-  
+for (id in 20001:3e4) {
+
   cat("Getting data for player ID", id, "...", "\n")
   
   new <- get_data(id)
