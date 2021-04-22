@@ -41,7 +41,7 @@ thresholds <- seq(500, 8e4, 500)
 # initialise
 df <- get_data(1e4)
 
-for (id in 10037:2e4) {
+for (id in 10180:2e4) {
   
   cat("Getting data for player ID", id, "...", "\n")
   
@@ -49,7 +49,7 @@ for (id in 10037:2e4) {
   
   df <- df %>% add_case(new)
   
-  Sys.sleep(4)
+  Sys.sleep(10)
   
   if(id %in% thresholds) {
     saveRDS(df, file = paste0("TM_data", "_", id, ".RDS"))
